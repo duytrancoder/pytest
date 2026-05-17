@@ -26,65 +26,92 @@ def login(client, username, password):
 def logout(client):
     return client.get('/logout', follow_redirects=True)
 
-def test_register_and_login_success(client):
-    res_reg = client.post('/register', data={
-        'username': 'khach_test',
+def test_register_success(client):
+    res = client.post('/register', data={
+        'username': 'khach_moi',
         'password': '123'
     }, follow_redirects=True)
-    assert res_reg.status_code == 200
-    assert "Đăng ký thành công!" in res_reg.get_data(as_text=True)
-    
-    res_login = login(client, 'khach_test', '123')
-    assert res_login.status_code == 200
-    assert "Xin chào, khach_test!" in res_login.get_data(as_text=True)
+    assert res.status_code == 200
+    assert "Đăng ký thành công!" in res.get_data(as_text=True)
+    assert "khach_moi" in users
+
+def test_register_duplicate(client):
+    client.post('/register', data={'username': 'test_user', 'password': '123'})
+    res = client.post('/register', data={'username': 'test_user', 'password': '456'}, follow_redirects=True)
+    assert res.status_code == 200
+    assert "Tên đăng nhập đã tồn tại!" in res.get_data(as_text=True)
+
+def test_login_success(client):
+    res = login(client, 'admin', '123456')
+    assert res.status_code == 200
+    assert "Xin chào, admin!" in res.get_data(as_text=True)
 
 def test_login_fail(client):
-    response = login(client, 'admin', 'sai_pass')
-    assert response.status_code == 200
-    assert "Sai tên đăng nhập/mật khẩu!" in response.get_data(as_text=True)
+    res = login(client, 'admin', 'mat_khau_sai')
+    assert res.status_code == 200
+    assert "Sai tên đăng nhập/mật khẩu!" in res.get_data(as_text=True)
+
+def test_logout_success(client):
+    login(client, 'admin', '123456')
+    res = logout(client)
+    assert res.status_code == 200
+    assert "Bạn đã đăng xuất!" in res.get_data(as_text=True)
+    with client.session_transaction() as sess:
+        assert 'username' not in sess
 
 def test_admin_add_product(client):
     login(client, 'admin', '123456')
-    response = client.post('/add', data={
+    res = client.post('/add', data={
         'ma_sp': 'SP02',
         'name': 'Ban phim co',
         'price': 1000000,
         'quantity': 5
     }, follow_redirects=True)
-    
-    assert response.status_code == 200
+    assert res.status_code == 200
     assert "SP02" in products
-    assert products["SP02"]["name"] == "Ban phim co"
+    assert products["SP02"]["quantity"] == 5
 
-def test_customer_cannot_add_product(client):
+def test_admin_edit_product(client):
+    login(client, 'admin', '123456')
+    res = client.post('/edit/SP01', data={
+        'name': 'Laptop Dell XPS',
+        'price': 20000000,
+        'quantity': 15
+    }, follow_redirects=True)
+    assert res.status_code == 200
+    assert products["SP01"]["name"] == "Laptop Dell XPS"
+    assert products["SP01"]["price"] == 20000000
+    assert products["SP01"]["quantity"] == 15
+
+def test_admin_delete_product(client):
+    login(client, 'admin', '123456')
+    res = client.post('/delete/SP01', follow_redirects=True)
+    assert res.status_code == 200
+    assert "SP01" not in products
+
+def test_customer_access_denied(client):
     client.post('/register', data={'username': 'khach', 'password': '123'})
     login(client, 'khach', '123')
-    
-    response = client.get('/add', follow_redirects=True)
-    
-    assert response.status_code == 200
-    assert "Chỉ admin mới có quyền!" in response.get_data(as_text=True)
+    res = client.get('/add', follow_redirects=True)
+    assert res.status_code == 200
+    assert "Chỉ admin mới có quyền!" in res.get_data(as_text=True)
 
-def test_shopping_flow(client):
+def test_shopping_and_checkout_flow(client):
     client.post('/register', data={'username': 'buyer', 'password': '123'})
     login(client, 'buyer', '123')
     
-    response_add = client.post('/add_to_cart/SP01', data={'quantity': 2}, follow_redirects=True)
-    assert response_add.status_code == 200
-    
+    client.post('/add_to_cart/SP01', data={'quantity': 3}, follow_redirects=True)
     with client.session_transaction() as sess:
-        assert 'cart' in sess
-        assert sess['cart']['SP01'] == 2
+        assert sess['cart']['SP01'] == 3
         
-    response_checkout = client.post('/checkout', data={
+    client.post('/checkout', data={
         'name': 'Nguyen Van A',
         'phone': '0123456789',
         'address': 'Ha Noi',
         'payment_method': 'COD'
     }, follow_redirects=True)
     
-    assert products["SP01"]["quantity"] == 8
-    assert sales_stats["total_revenue"] == 30000000
+    assert products["SP01"]["quantity"] == 7
+    assert sales_stats["total_revenue"] == 45000000
     assert len(orders) == 1
-    assert orders[0]['customer_name'] == 'Nguyen Van A'
-    assert orders[0]['total'] == 30000000
+    assert orders[0]['total'] == 45000000
