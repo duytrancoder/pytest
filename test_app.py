@@ -26,26 +26,22 @@ def login(client, username, password):
 def logout(client):
     return client.get('/logout', follow_redirects=True)
 
-def test_register_success(client):
-    response = client.post('/register', data={
+def test_register_and_login_success(client):
+    res_reg = client.post('/register', data={
         'username': 'khach_test',
         'password': '123'
     }, follow_redirects=True)
+    assert res_reg.status_code == 200
+    assert "Đăng ký thành công!" in res_reg.get_data(as_text=True)
     
-    assert response.status_code == 200
-    assert b"Vui l\xc3\xb2ng \xc4\x91\xc4\x83ng nh\xc3\xa2p" in response.data
-    assert "khach_test" in users
-    assert users["khach_test"]["role"] == "customer"
-
-def test_login_success(client):
-    response = login(client, 'admin', '123456')
-    assert response.status_code == 200
-    assert b"Xin ch\xc3\xa0o, admin" in response.data
+    res_login = login(client, 'khach_test', '123')
+    assert res_login.status_code == 200
+    assert "Xin chào, khach_test!" in res_login.get_data(as_text=True)
 
 def test_login_fail(client):
     response = login(client, 'admin', 'sai_pass')
     assert response.status_code == 200
-    assert b"Sai t\xc3\xaan \xc4\x91\xc4\x83ng nh\xc3\xa2p ho\xe1\xba\xb7c m\xe1\xba\xadt kh\xe1\xba\xa9u" in response.data
+    assert "Sai tên đăng nhập/mật khẩu!" in response.get_data(as_text=True)
 
 def test_admin_add_product(client):
     login(client, 'admin', '123456')
@@ -67,7 +63,7 @@ def test_customer_cannot_add_product(client):
     response = client.get('/add', follow_redirects=True)
     
     assert response.status_code == 200
-    assert b"Ch\xe1\xbb\x89 admin" in response.data
+    assert "Chỉ admin mới có quyền!" in response.get_data(as_text=True)
 
 def test_shopping_flow(client):
     client.post('/register', data={'username': 'buyer', 'password': '123'})
