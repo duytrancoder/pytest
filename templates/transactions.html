@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% block content %}
+
+{% if view == 'cart_checkout' %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <h3 class="mb-4 text-center">🛒 Giỏ Hàng & Thanh Toán</h3>
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                {% if cart_items %}
+                <table class="table table-bordered align-middle text-center">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tên SP</th>
+                            <th>Đơn Giá</th>
+                            <th>SL</th>
+                            <th>Thành Tiền</th>
+                        </tr>
+                    </thead>
+                    <tbody>{% for item in cart_items %}<tr>
+                            <td class="text-start">{{ item.name }}</td>
+                            <td>{{ "{:,.0f}".format(item.price) }} đ</td>
+                            <td>{{ item.qty }}</td>
+                            <td class="text-danger fw-bold">{{ "{:,.0f}".format(item.thanh_tien) }} đ</td>
+                        </tr>{% endfor %}</tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <td colspan="3" class="text-end fw-bold">Tổng:</td>
+                            <td class="text-danger fw-bold fs-5">{{ "{:,.0f}".format(total_bill) }} đ</td>
+                        </tr>
+                    </tfoot>
+                </table>
+                {% if not show_checkout %}<div class="d-flex justify-content-between mt-4"><a href="/"
+                        class="btn btn-outline-secondary">⬅ Tiếp tục mua sắm</a><a href="/checkout"
+                        class="btn btn-success fw-bold px-4">💳 Tiến hành Thanh Toán</a></div>{% endif %}
+                {% else %}<div class="text-center py-5">
+                    <h5 class="text-muted">Giỏ hàng trống!</h5><a href="/" class="btn btn-primary mt-3">Quay lại mua
+                        hàng</a>
+                </div>{% endif %}
+            </div>
+        </div>
+
+        {% if show_checkout and cart_items %}
+        <div class="card shadow-sm border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">📍 Điền Thông Tin Giao Hàng</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/checkout">
+                    <div class="row">
+                        <div class="col-md-6 mb-3"><label>Họ Tên</label><input type="text" name="name"
+                                class="form-control" required></div>
+                        <div class="col-md-6 mb-3"><label>SĐT</label><input type="text" name="phone"
+                                class="form-control" required></div>
+                    </div>
+                    <div class="mb-3"><label>Địa Chỉ</label><textarea name="address" class="form-control" rows="2"
+                            required></textarea></div>
+                    <div class="mb-4"><label>Phương Thức</label><select name="payment_method" class="form-select">
+                            <option value="COD">Thanh toán khi nhận hàng (COD)</option>
+                            <option value="CK">Chuyển khoản</option>
+                        </select></div>
+                    <button type="submit" class="btn btn-success w-100 btn-lg mb-2">Xác Nhận Đặt Hàng</button><a
+                        href="/cart" class="btn btn-outline-secondary w-100">Hủy bỏ</a>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% elif view == 'orders' %}
+<h3 class="mb-4">{% if session.get('role') == 'admin' %} Quản Lý Đơn Hàng Khách {% else %} Lịch Sử Mua Hàng {% endif %}
+</h3>
+{% if orders %}
+<div class="row">
+    {% for order in orders %}
+    <div class="col-md-6 mb-4">
+        <div class="card shadow-sm border-info">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <strong class="text-primary">Mã: {{ order.order_id }}</strong>
+
+                {% if session.get('role') == 'admin' %}
+                <!-- Form cập nhật trạng thái dành cho Admin -->
+                <form action="/update_order/{{ order.order_id }}" method="POST"
+                    class="d-inline d-flex align-items-center m-0">
+                    <select name="status" class="form-select form-select-sm me-2" style="width: 130px;">
+                        <option value="Chờ xử lý" {% if order.status=='Chờ xử lý' %}selected{% endif %}>Chờ xử lý
+                        </option>
+                        <option value="Đang giao" {% if order.status=='Đang giao' %}selected{% endif %}>Đang giao
+                        </option>
+                        <option value="Hoàn thành" {% if order.status=='Hoàn thành' %}selected{% endif %}>Hoàn thành
+                        </option>
+                        <option value="Đã hủy" {% if order.status=='Đã hủy' %}selected{% endif %}>Đã hủy</option>
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-primary">Lưu</button>
+                </form>
+                {% else %}
+                <!-- Hiển thị Badge màu sắc cho Khách hàng -->
+                <span class="badge 
+            {% if order.status == 'Hoàn thành' %}bg-success
+            {% elif order.status == 'Đã hủy' %}bg-danger
+            {% elif order.status == 'Đang giao' %}bg-info text-dark
+            {% else %}bg-warning text-dark{% endif %}">
+                    {{ order.status }}
+                </span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <p class="mb-1"><small>🕒 {{ order.date }}</small></p>
+                {% if session.get('role') == 'admin' %}<p class="mb-1">👤 TK: <strong>{{ order.username }}</strong></p>
+                {% endif %}
+                <p class="mb-1">📍 Người nhận: {{ order.customer_name }} - {{ order.phone }}</p>
+                <p class="mb-2">🏠 Địa chỉ: {{ order.address }}</p>
+                <ul class="mb-2">{% for item in order['items'] %}<li>{{ item.name }} (x{{ item.qty }})</li>{% endfor %}
+                </ul>
+                <h5 class="text-danger text-end mt-3">Tổng: {{ "{:,.0f}".format(order.total) }} đ</h5>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}<div class="alert alert-secondary">Chưa có đơn hàng nào!</div>{% endif %}
+{% endif %}
+
+{% endblock %}

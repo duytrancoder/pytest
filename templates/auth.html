@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5">
+        <div class="card shadow">
+            <div
+                class="card-header text-white text-center {% if action == 'login' %}bg-primary{% else %}bg-success{% endif %}">
+                <h4>{% if action == 'login' %}Đăng Nhập Hệ Thống{% else %}Đăng Ký Tài Khoản{% endif %}</h4>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Tên Đăng Nhập</label>
+                        <input type="text" name="username" class="form-control" required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label">Mật Khẩu</label>
+                        <input type="password" name="password" class="form-control" required>
+                    </div>
+                    <button type="submit"
+                        class="btn w-100 {% if action == 'login' %}btn-primary{% else %}btn-success{% endif %}">
+                        {% if action == 'login' %}Đăng Nhập{% else %}Đăng Ký{% endif %}
+                    </button>
+                </form>
+                <div class="text-center mt-3">
+                    {% if action == 'login' %}
+                    <p>Chưa có tài khoản? <a href="/register">Đăng ký ngay</a></p>
+                    {% else %}
+                    <p>Đã có tài khoản? <a href="/login">Quay lại đăng nhập</a></p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
