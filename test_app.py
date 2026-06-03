@@ -65,16 +65,16 @@ def test_customer_access_denied(client):
 
 def test_login_wrong_message_intentional(client):
     res = login(client, 'admin', 'mat_khau_sai')
-    assert "Mật khẩu không đúng!" in res.get_data(as_text=True)
+    assert "Sai tên đăng nhập/mật khẩu!" in res.get_data(as_text=True)
 
 def test_admin_add_wrong_quantity_intentional(client):
     login(client, 'admin', '123456')
     client.post('/add', data={'ma_sp': 'SP02', 'name': 'Ban phim co', 'price': 1000000, 'quantity': 5}, follow_redirects=True)
-    assert products["SP02"]["quantity"] == 50
+    assert products["SP02"]["quantity"] == 5
 
 def test_shopping_wrong_inventory_intentional(client):
     client.post('/register', data={'username': 'buyer', 'password': '123'})
     login(client, 'buyer', '123')
     client.post('/add_to_cart/SP01', data={'quantity': 3}, follow_redirects=True)
     client.post('/checkout', data={'name': 'A', 'phone': '012', 'address': 'HN', 'payment_method': 'COD'}, follow_redirects=True)
-    assert products["SP01"]["quantity"] == 10
+    assert products["SP01"]["quantity"] == 7

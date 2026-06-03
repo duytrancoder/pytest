@@ -17,16 +17,16 @@
                     {% if session.get('role') == 'customer' %}
                     <li class="nav-item me-3">
                         <a class="btn btn-warning fw-bold text-dark" href="/cart">
-                            🛒 Giỏ Hàng <span class="badge bg-danger">{{ session.get('cart', {}) | length }}</span>
+                            Giỏ Hàng <span class="badge bg-danger">{{ session.get('cart', {}) | length }}</span>
                         </a>
                     </li>
                     {% endif %}
                     <li class="nav-item me-3">
-                        <a class="nav-link text-white fw-bold" href="/orders">📦 Đơn Hàng</a>
+                        <a class="nav-link text-white fw-bold" href="/orders"> Đơn Hàng</a>
                     </li>
                     <li class="nav-item">
                         <span class="nav-link text-white">
-                            👤 Chào, <strong>{{ session['username'] }}</strong>
+                            Chào, <strong>{{ session['username'] }}</strong>
                             ({% if session.get('role') == 'admin' %}Admin{% else %}Khách{% endif %})
                         </span>
                     </li>
