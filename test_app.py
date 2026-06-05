@@ -55,7 +55,8 @@ def test_admin_edit_product(client):
 def test_admin_delete_product(client):
     login(client, 'admin', '123456')
     client.post('/delete/SP01', follow_redirects=True)
-    assert "SP01" not in products
+    # Cố tình gây lỗi FAILED (AssertionError)
+    assert "SP01" in products
 
 def test_customer_access_denied(client):
     client.post('/register', data={'username': 'khach', 'password': '123'})
@@ -67,10 +68,24 @@ def test_login_wrong_message_intentional(client):
     res = login(client, 'admin', 'mat_khau_sai')
     assert "Sai tên đăng nhập/mật khẩu!" in res.get_data(as_text=True)
 
-def test_admin_add_wrong_quantity_intentional(client):
+@pytest.fixture
+def admin_setup_error():
+    # Fixture ném ra ngoại lệ để tạo lỗi ERROR trong giai đoạn Setup của pytest
+    raise RuntimeError("Lỗi kết nối cơ sở dữ liệu admin (Lỗi thiết lập Fixture)!")
+
+def test_admin_add_wrong_quantity_intentional(client, admin_setup_error):
     login(client, 'admin', '123456')
     client.post('/add', data={'ma_sp': 'SP02', 'name': 'Ban phim co', 'price': 1000000, 'quantity': 5}, follow_redirects=True)
     assert products["SP02"]["quantity"] == 5
+
+def test_cart_add_success(client):
+    client.post('/register', data={'username': 'buyer', 'password': '123'})
+    login(client, 'buyer', '123')
+    res = client.post('/add_to_cart/SP01', data={'quantity': 3}, follow_redirects=True)
+    assert res.status_code == 200
+    assert "Đã thêm 3 sản phẩm vào giỏ!" in res.get_data(as_text=True)
+    with client.session_transaction() as sess:
+        assert sess.get('cart', {}).get('SP01') == 3
 
 def test_shopping_wrong_inventory_intentional(client):
     client.post('/register', data={'username': 'buyer', 'password': '123'})
@@ -78,3 +93,70 @@ def test_shopping_wrong_inventory_intentional(client):
     client.post('/add_to_cart/SP01', data={'quantity': 3}, follow_redirects=True)
     client.post('/checkout', data={'name': 'A', 'phone': '012', 'address': 'HN', 'payment_method': 'COD'}, follow_redirects=True)
     assert products["SP01"]["quantity"] == 7
+
+def test_admin_add_to_cart_blocked(client):
+    login(client, 'admin', '123456')
+    res = client.post('/add_to_cart/SP01', data={'quantity': 1}, follow_redirects=True)
+    assert res.status_code == 200
+    with client.session_transaction() as sess:
+        assert 'cart' not in sess or 'SP01' not in sess['cart']
+
+def test_order_customer_isolation(client):
+    # Đăng ký và đặt đơn cho buyer1
+    client.post('/register', data={'username': 'buyer1', 'password': '123'})
+    login(client, 'buyer1', '123')
+    client.post('/add_to_cart/SP01', data={'quantity': 1}, follow_redirects=True)
+    client.post('/checkout', data={'name': 'Buyer One', 'phone': '011', 'address': 'HN', 'payment_method': 'COD'}, follow_redirects=True)
+    logout(client)
+
+    # Đăng ký và đặt đơn cho buyer2
+    client.post('/register', data={'username': 'buyer2', 'password': '123'})
+    login(client, 'buyer2', '123')
+    client.post('/add_to_cart/SP01', data={'quantity': 1}, follow_redirects=True)
+    client.post('/checkout', data={'name': 'Buyer Two', 'phone': '022', 'address': 'SG', 'payment_method': 'COD'}, follow_redirects=True)
+    
+    # buyer2 xem danh sách đơn hàng
+    res = client.get('/orders')
+    html_content = res.get_data(as_text=True)
+    
+    # buyer2 phải thấy đơn của mình (DH002) nhưng KHÔNG được thấy đơn của buyer1 (DH001)
+    assert "DH002" in html_content
+    assert "Buyer Two" in html_content
+    assert "DH001" not in html_content
+    assert "Buyer One" not in html_content
+
+def test_order_admin_view_all(client):
+    # Đặt đơn cho buyer1
+    client.post('/register', data={'username': 'buyer1', 'password': '123'})
+    login(client, 'buyer1', '123')
+    client.post('/add_to_cart/SP01', data={'quantity': 1}, follow_redirects=True)
+    client.post('/checkout', data={'name': 'Buyer One', 'phone': '011', 'address': 'HN', 'payment_method': 'COD'}, follow_redirects=True)
+    logout(client)
+
+    # Admin đăng nhập và xem orders
+    login(client, 'admin', '123456')
+    res = client.get('/orders')
+    html_content = res.get_data(as_text=True)
+    
+    # Admin phải thấy đơn của buyer1 (DH001)
+    assert "DH001" in html_content
+    assert "Buyer One" in html_content
+
+def test_order_admin_update_status(client):
+    # Đặt đơn cho buyer1
+    client.post('/register', data={'username': 'buyer1', 'password': '123'})
+    login(client, 'buyer1', '123')
+    client.post('/add_to_cart/SP01', data={'quantity': 1}, follow_redirects=True)
+    client.post('/checkout', data={'name': 'Buyer One', 'phone': '011', 'address': 'HN', 'payment_method': 'COD'}, follow_redirects=True)
+    logout(client)
+
+    # Admin đăng nhập và cập nhật trạng thái đơn DH001
+    login(client, 'admin', '123456')
+    res = client.post('/update_order/DH001', data={'status': 'Đang giao'}, follow_redirects=True)
+    
+    # Kiểm tra trạng thái trong biến orders của app
+    assert orders[0]['status'] == 'Đang giao'
+    
+    # Kiểm tra giao diện hiển thị trạng thái mới
+    html_content = res.get_data(as_text=True)
+    assert "Đang giao" in html_content
