@@ -6,7 +6,7 @@
 | Thông tin | Nội dung |
 |:---|:---|
 | **Tên nhóm** | Nhóm X |
-| **Thành viên** | Thành viên 1, Thành viên 2, Thành viên 3, Thành viên 4 |
+| **Thành viên** | Thành viên 1, Thành viên 2, Thành viên 3, Thành viên 4, Thành viên 5 |
 | **Học phần** | Kiểm thử Phần mềm |
 | **Công cụ kiểm thử** | pytest 8.2.0 (Python) |
 | **Ứng dụng kiểm thử** | Hệ thống Quản lý Bán hàng (Flask Web App) |
@@ -256,6 +256,7 @@ Bước 4: Báo cáo
 | Thành viên 2 | Quản lý sản phẩm (Product Management) |
 | Thành viên 3 | Giỏ hàng & Thanh toán (Cart & Checkout) |
 | Thành viên 4 | Quản lý đơn hàng (Order Management) |
+| Thành viên 5 | Tìm kiếm & Lọc sản phẩm nâng cao (Advanced Search & Filter) |
 
 ---
 
@@ -576,6 +577,130 @@ pytest -v test_app.py -k "order"
 
 ---
 
+### 3.7. Thành viên 5 — Kiểm thử chức năng Tìm kiếm & Lọc Sản phẩm nâng cao (Advanced Search & Filter)
+
+#### 3.7.1. Đặc tả chức năng
+
+Chức năng **Tìm kiếm & Lọc sản phẩm nâng cao** được triển khai tại route `GET /search` trả về dữ liệu JSON, hỗ trợ các bộ lọc kết hợp:
+
+- **Tìm kiếm theo từ khóa** (`?q=`): So khớp với tên sản phẩm hoặc mã SP, không phân biệt chữ hoa/thường.
+- **Lọc khoảng giá** (`?min_price=`, `?max_price=`): Chỉ trả về sản phẩm có giá nằm trong khoảng `[min_price, max_price]`.
+- **Lọc tình trạng tồn kho** (`?in_stock=1`): Chỉ trả về sản phẩm có `quantity > 0`.
+- **Yêu cầu đăng nhập**: Route được bảo vệ bởi `@login_required` — người dùng chưa đăng nhập bị chuyển hướng về trang login.
+
+Phản hồi JSON có cấu trúc:
+```json
+{
+  "count": 2,
+  "products": [
+    {"ma_sp": "SP01", "name": "Laptop Dell", "price": 15000000, "quantity": 10, "in_stock": true},
+    ...
+  ]
+}
+```
+
+#### 3.7.2. Phương pháp kiểm thử
+
+- **Kiểm thử phân vùng tương đương (Equivalence Partitioning)**:
+  - Vùng hợp lệ — từ khóa khớp → trả về đúng số lượng sản phẩm.
+  - Vùng không hợp lệ — bộ lọc giá loại bỏ sản phẩm ngoài khoảng.
+  - Vùng đặc biệt — lọc `in_stock` loại bỏ sản phẩm hết hàng.
+- **Kiểm thử phân quyền (Authorization Testing)**: Đảm bảo route `/search` không thể truy cập khi chưa đăng nhập.
+- **Kiểm thử API (API Testing)**: Xác nhận cấu trúc và nội dung phản hồi JSON (`status_code`, `count`, `products`).
+
+#### 3.7.3. Fixture chuyên dụng
+
+Thành viên 5 xây dựng fixture `search_client` kế thừa từ `client`, bổ sung thêm 3 sản phẩm đa dạng giá và tình trạng tồn kho để phục vụ kiểm thử:
+
+```python
+@pytest.fixture
+def search_client(client):
+    products["SP02"] = {"name": "Chuột Logitech", "price": 300000,  "quantity": 50}
+    products["SP03"] = {"name": "Bàn phím cơ",   "price": 800000,  "quantity": 0}  # hết hàng
+    products["SP04"] = {"name": "Màn hình Dell",  "price": 5000000, "quantity": 5}
+    login(client, "admin", "123456")
+    return client
+```
+
+Sau khi fixture này chạy, bộ sản phẩm trong DB thử nghiệm gồm:
+
+| Mã SP | Tên | Giá | Tồn kho |
+|:---:|:---|---:|:---:|
+| SP01 | Laptop Dell | 15.000.000 đ | 10 |
+| SP02 | Chuột Logitech | 300.000 đ | 50 |
+| SP03 | Bàn phím cơ | 800.000 đ | 0 (hết hàng) |
+| SP04 | Màn hình Dell | 5.000.000 đ | 5 |
+
+#### 3.7.4. Danh sách ca kiểm thử
+
+| Mã ca | Tên ca kiểm thử | Điều kiện đầu vào | Các bước thực hiện | Dữ liệu đầu vào | Kết quả mong đợi | Kết quả thực tế |
+|:---|:---|:---|:---|:---|:---|:---|
+| **TC_SEARCH_01** | Tìm kiếm sản phẩm theo từ khóa tên | Đăng nhập admin, có 4 sản phẩm trong DB | 1. GET `/search?q=dell` 2. Kiểm tra JSON phản hồi | `q="dell"` | `count == 2`, danh sách chứa "Laptop Dell" và "Màn hình Dell" | ✅ PASSED |
+| **TC_SEARCH_02** | Lọc sản phẩm theo khoảng giá | Đăng nhập admin, có 4 sản phẩm trong DB | 1. GET `/search?min_price=200000&max_price=1000000` 2. Kiểm tra JSON | `min_price=200000`, `max_price=1000000` | `count == 2`, mọi SP trong kết quả có giá từ 200.000đ đến 1.000.000đ | ✅ PASSED |
+| **TC_SEARCH_03** | Lọc chỉ sản phẩm còn hàng | Đăng nhập admin, SP03 "Bàn phím cơ" có quantity=0 | 1. GET `/search?in_stock=1` 2. Kiểm tra danh sách | `in_stock=1` | `count == 3`, "Bàn phím cơ" không xuất hiện trong kết quả | ✅ PASSED |
+| **TC_SEARCH_04** | Người dùng chưa đăng nhập bị chặn | Không có session đăng nhập | 1. GET `/search` 2. Kiểm tra phản hồi | _(không có)_ | HTTP 200 (sau redirect), hiển thị "Vui lòng đăng nhập!", không trả về JSON | ✅ PASSED |
+
+#### 3.7.5. Mã nguồn kiểm thử tự động
+
+```python
+def test_search_by_keyword(search_client):
+    res = search_client.get("/search?q=dell")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["count"] == 2
+    names = [p["name"] for p in data["products"]]
+    assert "Laptop Dell"   in names
+    assert "Màn hình Dell" in names
+
+def test_search_filter_by_price_range(search_client):
+    res = search_client.get("/search?min_price=200000&max_price=1000000")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["count"] == 2
+    for p in data["products"]:
+        assert 200000 <= p["price"] <= 1000000
+
+def test_search_filter_in_stock_only(search_client):
+    res = search_client.get("/search?in_stock=1")
+    assert res.status_code == 200
+    data = res.get_json()
+    names = [p["name"] for p in data["products"]]
+    assert "Bàn phím cơ" not in names
+    assert data["count"] == 3
+
+def test_search_unauthenticated_blocked(client):
+    res = client.get("/search", follow_redirects=True)
+    assert res.status_code == 200
+    assert "Vui lòng đăng nhập!" in res.get_data(as_text=True)
+```
+
+#### 3.7.6. Quy trình thực hiện kiểm thử
+
+**Bước 1 — Xác định luồng xử lý:**
+```
+GET /search?q=dell&min_price=0&max_price=inf&in_stock=0
+    → Lặp qua products dict
+    → Lọc theo từ khóa (tên hoặc mã SP)
+    → Lọc theo khoảng giá
+    → Lọc theo tình trạng tồn kho
+    → jsonify({'count': N, 'products': [...]})
+```
+
+**Bước 2 — Thực thi:**
+```powershell
+pytest -v test_app.py -k "search"
+```
+
+**Bước 3 — Kết quả:**
+```
+test_app.py::test_search_by_keyword              PASSED
+test_app.py::test_search_filter_by_price_range   PASSED
+test_app.py::test_search_filter_in_stock_only    PASSED
+test_app.py::test_search_unauthenticated_blocked PASSED
+```
+
+---
+
 ## TỔNG KẾT KẾT QUẢ KIỂM THỬ
 
 ### Kết quả chạy toàn bộ bộ test:
@@ -587,23 +712,27 @@ pytest -v test_app.py
 ```
 ============================= test session starts =============================
 platform win32 -- Python 3.12.10, pytest-8.2.0, pluggy-1.6.0
-collected 15 items
+collected 19 items
 
-test_app.py::test_register_success                      PASSED  [  6%]
-test_app.py::test_register_duplicate                    PASSED  [ 13%]
-test_app.py::test_login_success                         PASSED  [ 20%]
-test_app.py::test_logout_success                        PASSED  [ 26%]
-test_app.py::test_admin_edit_product                    PASSED  [ 33%]
-test_app.py::test_admin_delete_product                  FAILED  [ 40%]
-test_app.py::test_customer_access_denied                PASSED  [ 46%]
-test_app.py::test_login_wrong_message_intentional       PASSED  [ 53%]
-test_app.py::test_admin_add_wrong_quantity_intentional  ERROR   [ 60%]
-test_app.py::test_cart_add_success                      PASSED  [ 66%]
-test_app.py::test_shopping_wrong_inventory_intentional  PASSED  [ 73%]
-test_app.py::test_admin_add_to_cart_blocked             PASSED  [ 80%]
-test_app.py::test_order_customer_isolation              PASSED  [ 86%]
-test_app.py::test_order_admin_view_all                  PASSED  [ 93%]
-test_app.py::test_order_admin_update_status             PASSED  [100%]
+test_app.py::test_register_success                      PASSED  [  5%]
+test_app.py::test_register_duplicate                    PASSED  [ 10%]
+test_app.py::test_login_success                         PASSED  [ 15%]
+test_app.py::test_logout_success                        PASSED  [ 21%]
+test_app.py::test_admin_edit_product                    PASSED  [ 26%]
+test_app.py::test_admin_delete_product                  FAILED  [ 31%]
+test_app.py::test_customer_access_denied                PASSED  [ 36%]
+test_app.py::test_login_wrong_message_intentional       PASSED  [ 42%]
+test_app.py::test_admin_add_wrong_quantity_intentional  ERROR   [ 47%]
+test_app.py::test_cart_add_success                      PASSED  [ 52%]
+test_app.py::test_shopping_wrong_inventory_intentional  PASSED  [ 57%]
+test_app.py::test_admin_add_to_cart_blocked             PASSED  [ 63%]
+test_app.py::test_order_customer_isolation              PASSED  [ 68%]
+test_app.py::test_order_admin_view_all                  PASSED  [ 73%]
+test_app.py::test_order_admin_update_status             PASSED  [ 78%]
+test_app.py::test_search_by_keyword                     PASSED  [ 84%]
+test_app.py::test_search_filter_by_price_range          PASSED  [ 89%]
+test_app.py::test_search_filter_in_stock_only           PASSED  [ 94%]
+test_app.py::test_search_unauthenticated_blocked        PASSED  [100%]
 
 =================================== ERRORS ====================================
 _________ ERROR at setup of test_admin_add_wrong_quantity_intentional _________
@@ -613,7 +742,7 @@ RuntimeError: Lỗi kết nối cơ sở dữ liệu admin (Lỗi thiết lập 
 __________________________ test_admin_delete_product __________________________
 AssertionError: assert 'SP01' in {}
 
-==================== 1 failed, 13 passed, 1 error in 0.63s ====================
+==================== 1 failed, 17 passed, 1 error in 0.99s ====================
 ```
 
 ### Tổng hợp kết quả:
@@ -624,14 +753,16 @@ AssertionError: assert 'SP01' in {}
 | Thành viên 2 | Quản lý sản phẩm | 4 | 2 | 1 | 1 |
 | Thành viên 3 | Giỏ hàng & Thanh toán | 3 | 3 | 0 | 0 |
 | Thành viên 4 | Quản lý đơn hàng | 3 | 3 | 0 | 0 |
-| **Tổng cộng** | | **15** | **13** | **1** | **1** |
+| Thành viên 5 | Tìm kiếm & Lọc sản phẩm | 4 | 4 | 0 | 0 |
+| **Tổng cộng** | | **19** | **17** | **1** | **1** |
 
 ### Nhận xét:
 
-- Bộ kiểm thử tự động gồm 15 ca đã được thực thi hoàn tất. Kết quả ghi nhận chính xác: **13 PASSED**, **1 FAILED**, và **1 ERROR**.
+- Bộ kiểm thử tự động gồm **19 ca** đã được thực thi hoàn tất. Kết quả ghi nhận chính xác: **17 PASSED**, **1 FAILED**, và **1 ERROR**.
 - Các ca kiểm thử của **Thành viên 4** đã được viết code tự động đầy đủ và đều **PASSED**, đảm bảo phân isolation dữ liệu đơn hàng giữa các khách hàng hoạt động bảo mật, và admin có thể xem toàn bộ đơn hàng cũng như thay đổi trạng thái thành công.
+- **Thành viên 5** bổ sung chức năng **Tìm kiếm & Lọc sản phẩm nâng cao** (`/search`) trả về JSON, với 4 ca kiểm thử đều **PASSED** — bao phủ lọc từ khóa, khoảng giá, tình trạng tồn kho và kiểm tra phân quyền truy cập route.
 - Các ca lỗi **FAILED** và **ERROR** được thiết kế cố ý nhằm minh họa khả năng phát hiện lỗi của pytest trong thực tế (AssertionError ở giai đoạn chạy test và RuntimeError ở giai đoạn Setup).
-- Fixture của pytest giúp **cách ly môi trường** giữa các test case, đảm bảo tính độc lập và tính tái lập của bộ kiểm thử.
+- Fixture của pytest giúp **cách ly môi trường** giữa các test case, đảm bảo tính độc lập và tính tái lập của bộ kiểm thử. Kỹ thuật **fixture kế thừa** (`search_client` kế thừa `client`) được Thành viên 5 áp dụng để mở rộng môi trường kiểm thử mà không trùng lặp code.
 
 ---
 

@@ -160,3 +160,69 @@ def test_order_admin_update_status(client):
     # Kiểm tra giao diện hiển thị trạng thái mới
     html_content = res.get_data(as_text=True)
     assert "Đang giao" in html_content
+
+# ════════════════════════════════════════════════════════════════════════════════
+# Thành viên 5 — Kiểm thử chức năng Tìm kiếm & Lọc Sản phẩm nâng cao (/search)
+# ════════════════════════════════════════════════════════════════════════════════
+
+@pytest.fixture
+def search_client(client):
+    """
+    Mở rộng fixture `client`: thêm sẵn 3 sản phẩm đa dạng
+    để phục vụ các ca kiểm thử tìm kiếm/lọc.
+    """
+    products["SP02"] = {"name": "Chuột Logitech", "price": 300000,   "quantity": 50}
+    products["SP03"] = {"name": "Bàn phím cơ",   "price": 800000,   "quantity": 0}   # hết hàng
+    products["SP04"] = {"name": "Màn hình Dell",  "price": 5000000,  "quantity": 5}
+    login(client, "admin", "123456")
+    return client
+
+def test_search_by_keyword(search_client):
+    """
+    TC_SEARCH_01 — Tìm kiếm theo từ khóa tên sản phẩm.
+    Đầu vào : q=dell
+    Mong đợi: trả về 2 SP chứa 'dell' (Laptop Dell + Màn hình Dell), count == 2
+    """
+    res = search_client.get("/search?q=dell")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["count"] == 2
+    names = [p["name"] for p in data["products"]]
+    assert "Laptop Dell"  in names
+    assert "Màn hình Dell" in names
+
+def test_search_filter_by_price_range(search_client):
+    """
+    TC_SEARCH_02 — Lọc sản phẩm theo khoảng giá.
+    Đầu vào : min_price=200000, max_price=1000000
+    Mong đợi: chỉ trả về SP trong khoảng giá đó (Chuột Logitech 300k + Bàn phím cơ 800k), count == 2
+    """
+    res = search_client.get("/search?min_price=200000&max_price=1000000")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["count"] == 2
+    for p in data["products"]:
+        assert 200000 <= p["price"] <= 1000000
+
+def test_search_filter_in_stock_only(search_client):
+    """
+    TC_SEARCH_03 — Lọc chỉ sản phẩm còn hàng (in_stock=1).
+    Đầu vào : in_stock=1
+    Mong đợi: 'Bàn phím cơ' (quantity=0) bị loại, count == 3
+    """
+    res = search_client.get("/search?in_stock=1")
+    assert res.status_code == 200
+    data = res.get_json()
+    names = [p["name"] for p in data["products"]]
+    assert "Bàn phím cơ" not in names
+    assert data["count"] == 3
+
+def test_search_unauthenticated_blocked(client):
+    """
+    TC_SEARCH_04 — Người dùng chưa đăng nhập bị chặn truy cập /search.
+    Đầu vào : Không có session, GET /search
+    Mong đợi: Chuyển hướng về trang đăng nhập (không trả về JSON)
+    """
+    res = client.get("/search", follow_redirects=True)
+    assert res.status_code == 200
+    assert "Vui lòng đăng nhập!" in res.get_data(as_text=True)

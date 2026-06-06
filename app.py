@@ -173,5 +173,49 @@ def update_order(order_id):
             break
     return redirect(url_for('order_history'))
 
+# ── Thành viên 5: Tìm kiếm & Lọc sản phẩm nâng cao ──────────────────────────
+@app.route('/search')
+@login_required
+def search_products():
+    """
+    API tìm kiếm sản phẩm nâng cao với các bộ lọc:
+      - q         : tìm theo tên hoặc mã SP (không phân biệt hoa/thường)
+      - min_price : giá tối thiểu (VNĐ)
+      - max_price : giá tối đa (VNĐ)
+      - in_stock  : '1' → chỉ hiển thị sản phẩm còn hàng
+    Trả về JSON danh sách sản phẩm khớp và tổng số kết quả.
+    """
+    from flask import jsonify
+
+    keyword   = request.args.get('q', '').strip().lower()
+    in_stock  = request.args.get('in_stock', '0') == '1'
+
+    try:
+        min_price = float(request.args.get('min_price', 0))
+        max_price = float(request.args.get('max_price', float('inf')))
+    except (ValueError, TypeError):
+        min_price, max_price = 0, float('inf')
+
+    results = []
+    for ma, info in products.items():
+        # Lọc theo từ khóa
+        if keyword and keyword not in ma.lower() and keyword not in info['name'].lower():
+            continue
+        # Lọc theo khoảng giá
+        if not (min_price <= info['price'] <= max_price):
+            continue
+        # Lọc theo tình trạng tồn kho
+        if in_stock and info['quantity'] <= 0:
+            continue
+        results.append({
+            'ma_sp'   : ma,
+            'name'    : info['name'],
+            'price'   : info['price'],
+            'quantity': info['quantity'],
+            'in_stock': info['quantity'] > 0
+        })
+
+    return jsonify({'count': len(results), 'products': results})
+
 if __name__ == '__main__':
     app.run(debug=True)
