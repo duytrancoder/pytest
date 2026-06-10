@@ -1,228 +1,282 @@
 import pytest
-from app import app, users, products, sales_stats, orders
+from flask import session, get_flashed_messages, url_for
+from app import (
+    app,
+    users,
+    products,
+    sales_stats,
+    orders,
+    register,
+    login as app_login,
+    logout as app_logout,
+    add_product,
+    edit_product,
+    delete_product,
+    add_to_cart,
+    checkout,
+    order_history,
+    update_order,
+    search_products,
+)
 
-@pytest.fixture
-def client():
-    app.config['TESTING'] = True
-    
-    users.clear()
-    users["admin"] = {"password": "123456", "role": "admin"}
-    
-    products.clear()
-    products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
-    
-    sales_stats["total_revenue"] = 0
-    orders.clear()
-
-    with app.test_client() as client:
-        yield client
-
-def login(client, username, password):
-    return client.post('/login', data=dict(
-        username=username,
-        password=password
-    ), follow_redirects=True)
-
-def logout(client):
-    return client.get('/logout', follow_redirects=True)
-
-def test_register_success(client):
-    res = client.post('/register', data={'username': 'khach_moi', 'password': '123'}, follow_redirects=True)
-    assert res.status_code == 200
-    assert "Đăng ký thành công!" in res.get_data(as_text=True)
-    assert "khach_moi" in users
-
-def test_register_duplicate(client):
-    client.post('/register', data={'username': 'test_user', 'password': '123'})
-    res = client.post('/register', data={'username': 'test_user', 'password': '456'}, follow_redirects=True)
-    assert "Tên đăng nhập đã tồn tại!" in res.get_data(as_text=True)
-
-def test_login_success(client):
-    res = login(client, 'admin', '123456')
-    assert "Xin chào, admin!" in res.get_data(as_text=True)
-
-def test_logout_success(client):
-    login(client, 'admin', '123456')
-    res = logout(client)
-    assert "Bạn đã đăng xuất!" in res.get_data(as_text=True)
-
-def test_admin_edit_product(client):
-    login(client, 'admin', '123456')
-    client.post('/edit/SP01', data={'name': 'Laptop Dell XPS', 'price': 20000000, 'quantity': 15}, follow_redirects=True)
-    assert products["SP01"]["name"] == "Laptop Dell XPS"
-    assert products["SP01"]["price"] == 20000000
-
-def test_admin_delete_product(client):
-    login(client, 'admin', '123456')
-    client.post('/delete/SP01', follow_redirects=True)
-    # Cố tình gây lỗi FAILED (AssertionError)
-    assert "SP01" in products
-
-def test_customer_access_denied(client):
-    client.post('/register', data={'username': 'khach', 'password': '123'})
-    login(client, 'khach', '123')
-    res = client.get('/add', follow_redirects=True)
-    assert "Chỉ admin mới có quyền!" in res.get_data(as_text=True)
-
-def test_login_wrong_message_intentional(client):
-    res = login(client, 'admin', 'mat_khau_sai')
-    assert "Sai tên đăng nhập/mật khẩu!" in res.get_data(as_text=True)
-
+# Giữ nguyên fixture lỗi kết nối cơ sở dữ liệu để tương thích
 @pytest.fixture
 def admin_setup_error():
-    # Fixture ném ra ngoại lệ để tạo lỗi ERROR trong giai đoạn Setup của pytest
     raise RuntimeError("Lỗi kết nối cơ sở dữ liệu admin (Lỗi thiết lập Fixture)!")
 
-def test_admin_add_wrong_quantity_intentional(client, admin_setup_error):
-    login(client, 'admin', '123456')
-    client.post('/add', data={'ma_sp': 'SP02', 'name': 'Ban phim co', 'price': 1000000, 'quantity': 5}, follow_redirects=True)
-    assert products["SP02"]["quantity"] == 5
-
-def test_cart_add_success(client):
-    client.post('/register', data={'username': 'buyer', 'password': '123'})
-    login(client, 'buyer', '123')
-    res = client.post('/add_to_cart/SP01', data={'quantity': 3}, follow_redirects=True)
-    assert res.status_code == 200
-    assert "Đã thêm 3 sản phẩm vào giỏ!" in res.get_data(as_text=True)
-    with client.session_transaction() as sess:
-        assert sess.get('cart', {}).get('SP01') == 3
-
-def test_shopping_wrong_inventory_intentional(client):
-    client.post('/register', data={'username': 'buyer', 'password': '123'})
-    login(client, 'buyer', '123')
-    client.post('/add_to_cart/SP01', data={'quantity': 3}, follow_redirects=True)
-    client.post('/checkout', data={'name': 'A', 'phone': '012', 'address': 'HN', 'payment_method': 'COD'}, follow_redirects=True)
-    assert products["SP01"]["quantity"] == 7
-
-def test_admin_add_to_cart_blocked(client):
-    login(client, 'admin', '123456')
-    res = client.post('/add_to_cart/SP01', data={'quantity': 1}, follow_redirects=True)
-    assert res.status_code == 200
-    with client.session_transaction() as sess:
-        assert 'cart' not in sess or 'SP01' not in sess['cart']
-
-def test_order_customer_isolation(client):
-    # Đăng ký và đặt đơn cho buyer1
-    client.post('/register', data={'username': 'buyer1', 'password': '123'})
-    login(client, 'buyer1', '123')
-    client.post('/add_to_cart/SP01', data={'quantity': 1}, follow_redirects=True)
-    client.post('/checkout', data={'name': 'Buyer One', 'phone': '011', 'address': 'HN', 'payment_method': 'COD'}, follow_redirects=True)
-    logout(client)
-
-    # Đăng ký và đặt đơn cho buyer2
-    client.post('/register', data={'username': 'buyer2', 'password': '123'})
-    login(client, 'buyer2', '123')
-    client.post('/add_to_cart/SP01', data={'quantity': 1}, follow_redirects=True)
-    client.post('/checkout', data={'name': 'Buyer Two', 'phone': '022', 'address': 'SG', 'payment_method': 'COD'}, follow_redirects=True)
-    
-    # buyer2 xem danh sách đơn hàng
-    res = client.get('/orders')
-    html_content = res.get_data(as_text=True)
-    
-    # buyer2 phải thấy đơn của mình (DH002) nhưng KHÔNG được thấy đơn của buyer1 (DH001)
-    assert "DH002" in html_content
-    assert "Buyer Two" in html_content
-    assert "DH001" not in html_content
-    assert "Buyer One" not in html_content
-
-def test_order_admin_view_all(client):
-    # Đặt đơn cho buyer1
-    client.post('/register', data={'username': 'buyer1', 'password': '123'})
-    login(client, 'buyer1', '123')
-    client.post('/add_to_cart/SP01', data={'quantity': 1}, follow_redirects=True)
-    client.post('/checkout', data={'name': 'Buyer One', 'phone': '011', 'address': 'HN', 'payment_method': 'COD'}, follow_redirects=True)
-    logout(client)
-
-    # Admin đăng nhập và xem orders
-    login(client, 'admin', '123456')
-    res = client.get('/orders')
-    html_content = res.get_data(as_text=True)
-    
-    # Admin phải thấy đơn của buyer1 (DH001)
-    assert "DH001" in html_content
-    assert "Buyer One" in html_content
-
-def test_order_admin_update_status(client):
-    # Đặt đơn cho buyer1
-    client.post('/register', data={'username': 'buyer1', 'password': '123'})
-    login(client, 'buyer1', '123')
-    client.post('/add_to_cart/SP01', data={'quantity': 1}, follow_redirects=True)
-    client.post('/checkout', data={'name': 'Buyer One', 'phone': '011', 'address': 'HN', 'payment_method': 'COD'}, follow_redirects=True)
-    logout(client)
-
-    # Admin đăng nhập và cập nhật trạng thái đơn DH001
-    login(client, 'admin', '123456')
-    res = client.post('/update_order/DH001', data={'status': 'Đang giao'}, follow_redirects=True)
-    
-    # Kiểm tra trạng thái trong biến orders của app
-    assert orders[0]['status'] == 'Đang giao'
-    
-    # Kiểm tra giao diện hiển thị trạng thái mới
-    html_content = res.get_data(as_text=True)
-    assert "Đang giao" in html_content
-
-# ════════════════════════════════════════════════════════════════════════════════
-# Thành viên 5 — Kiểm thử chức năng Tìm kiếm & Lọc Sản phẩm nâng cao (/search)
-# ════════════════════════════════════════════════════════════════════════════════
-
+# Fixture setup sản phẩm phục vụ tìm kiếm nâng cao
 @pytest.fixture
-def search_client(client):
-    """
-    Mở rộng fixture `client`: thêm sẵn 3 sản phẩm đa dạng
-    để phục vụ các ca kiểm thử tìm kiếm/lọc.
-    """
+def search_setup():
+    products.clear()
+    products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
     products["SP02"] = {"name": "Chuột Logitech", "price": 300000,   "quantity": 50}
     products["SP03"] = {"name": "Bàn phím cơ",   "price": 800000,   "quantity": 0}   # hết hàng
     products["SP04"] = {"name": "Màn hình Dell",  "price": 5000000,  "quantity": 5}
-    login(client, "admin", "123456")
-    return client
 
-def test_search_by_keyword(search_client):
-    """
-    TC_SEARCH_01 — Tìm kiếm theo từ khóa tên sản phẩm.
-    Đầu vào : q=dell
-    Mong đợi: trả về 2 SP chứa 'dell' (Laptop Dell + Màn hình Dell), count == 2
-    """
-    res = search_client.get("/search?q=dell")
-    assert res.status_code == 200
-    data = res.get_json()
-    assert data["count"] == 2
-    names = [p["name"] for p in data["products"]]
-    assert "Laptop Dell"  in names
-    assert "Màn hình Dell" in names
+# ==========================================
+# 1. Xác thực & Phân quyền (Authentication)
+# ==========================================
 
-def test_search_filter_by_price_range(search_client):
-    """
-    TC_SEARCH_02 — Lọc sản phẩm theo khoảng giá.
-    Đầu vào : min_price=200000, max_price=1000000
-    Mong đợi: chỉ trả về SP trong khoảng giá đó (Chuột Logitech 300k + Bàn phím cơ 800k), count == 2
-    """
-    res = search_client.get("/search?min_price=200000&max_price=1000000")
-    assert res.status_code == 200
-    data = res.get_json()
-    assert data["count"] == 2
-    for p in data["products"]:
-        assert 200000 <= p["price"] <= 1000000
+def test_register_success():
+    users.clear()
+    users["admin"] = {"password": "123456", "role": "admin"}
+    with app.test_request_context('/register', method='POST', data={'username': 'khach_moi', 'password': '123'}):
+        res = register()
+        assert res.status_code == 302
+        assert res.headers.get('Location') == '/login'
+        assert any("Đăng ký thành công!" in m[1] for m in get_flashed_messages(with_categories=True))
+        assert "khach_moi" in users
+        assert users["khach_moi"]["role"] == "customer"
 
-def test_search_filter_in_stock_only(search_client):
-    """
-    TC_SEARCH_03 — Lọc chỉ sản phẩm còn hàng (in_stock=1).
-    Đầu vào : in_stock=1
-    Mong đợi: 'Bàn phím cơ' (quantity=0) bị loại, count == 3
-    """
-    res = search_client.get("/search?in_stock=1")
-    assert res.status_code == 200
-    data = res.get_json()
-    names = [p["name"] for p in data["products"]]
-    assert "Bàn phím cơ" not in names
-    assert data["count"] == 3
+def test_register_duplicate():
+    users.clear()
+    users["test_user"] = {"password": "123", "role": "customer"}
+    with app.test_request_context('/register', method='POST', data={'username': 'test_user', 'password': '456'}):
+        res = register()
+        assert isinstance(res, str)  # Trả về chuỗi HTML của trang auth.html
+        assert any("Tên đăng nhập đã tồn tại!" in m[1] for m in get_flashed_messages(with_categories=True))
 
-def test_search_unauthenticated_blocked(client):
-    """
-    TC_SEARCH_04 — Người dùng chưa đăng nhập bị chặn truy cập /search.
-    Đầu vào : Không có session, GET /search
-    Mong đợi: Chuyển hướng về trang đăng nhập (không trả về JSON)
-    """
-    res = client.get("/search", follow_redirects=True)
-    assert res.status_code == 200
-    assert "Vui lòng đăng nhập!" in res.get_data(as_text=True)
+def test_login_success():
+    users.clear()
+    users["admin"] = {"password": "123456", "role": "admin"}
+    with app.test_request_context('/login', method='POST', data={'username': 'admin', 'password': '123456'}):
+        res = app_login()
+        assert res.status_code == 302
+        assert res.headers.get('Location') == '/'
+        assert session.get('username') == 'admin'
+        assert session.get('role') == 'admin'
+        assert any("Xin chào, admin!" in m[1] for m in get_flashed_messages(with_categories=True))
+
+def test_logout_success():
+    with app.test_request_context('/logout'):
+        session['username'] = 'admin'
+        session['role'] = 'admin'
+        res = app_logout()
+        assert res.status_code == 302
+        assert res.headers.get('Location') == '/login'
+        assert 'username' not in session
+        assert any("Bạn đã đăng xuất!" in m[1] for m in get_flashed_messages(with_categories=True))
+
+def test_login_wrong_message_intentional():
+    users.clear()
+    users["admin"] = {"password": "123456", "role": "admin"}
+    with app.test_request_context('/login', method='POST', data={'username': 'admin', 'password': 'mat_khau_sai'}):
+        res = app_login()
+        assert isinstance(res, str)  # Trả về chuỗi HTML quay lại trang đăng nhập
+        assert any("Sai tên đăng nhập/mật khẩu!" in m[1] for m in get_flashed_messages(with_categories=True))
+        assert 'username' not in session
+
+# ==========================================
+# 2. Quản lý sản phẩm (Product Management)
+# ==========================================
+
+def test_admin_edit_product():
+    products.clear()
+    products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
+    with app.test_request_context('/edit/SP01', method='POST', data={'name': 'Laptop Dell XPS', 'price': 20000000, 'quantity': 15}):
+        session['username'] = 'admin'
+        session['role'] = 'admin'
+        res = edit_product('SP01')
+        assert res.status_code == 302
+        assert res.headers.get('Location') == '/'
+        assert products["SP01"]["name"] == "Laptop Dell XPS"
+        assert products["SP01"]["price"] == 20000000
+        assert products["SP01"]["quantity"] == 15
+
+def test_admin_delete_product():
+    products.clear()
+    products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
+    with app.test_request_context('/delete/SP01', method='POST'):
+        session['username'] = 'admin'
+        session['role'] = 'admin'
+        res = delete_product('SP01')
+        assert res.status_code == 302
+        assert res.headers.get('Location') == '/'
+        assert "SP01" not in products
+
+def test_customer_access_denied():
+    with app.test_request_context('/add', method='GET'):
+        session['username'] = 'khach'
+        session['role'] = 'customer'
+        res = add_product()
+        # Chuyển hướng vì chỉ admin mới có quyền
+        assert res.status_code == 302
+        assert res.headers.get('Location') == '/'
+        assert any("Chỉ admin mới có quyền!" in m[1] for m in get_flashed_messages(with_categories=True))
+
+def test_admin_add_wrong_quantity_intentional():
+    products.clear()
+    with app.test_request_context('/add', method='POST', data={'ma_sp': 'SP02', 'name': 'Ban phim co', 'price': 1000000, 'quantity': 5}):
+        session['username'] = 'admin'
+        session['role'] = 'admin'
+        res = add_product()
+        assert res.status_code == 302
+        assert res.headers.get('Location') == '/'
+        assert products["SP02"]["quantity"] == 5
+
+# ==========================================
+# 3. Giỏ hàng & Thanh toán (Cart & Checkout)
+# ==========================================
+
+def test_cart_add_success():
+    products.clear()
+    products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
+    with app.test_request_context('/add_to_cart/SP01', method='POST', data={'quantity': 3}):
+        session['username'] = 'buyer'
+        session['role'] = 'customer'
+        res = add_to_cart('SP01')
+        assert res.status_code == 302
+        assert res.headers.get('Location') == '/'
+        assert any("Đã thêm 3 sản phẩm vào giỏ!" in m[1] for m in get_flashed_messages(with_categories=True))
+        assert session.get('cart', {}).get('SP01') == 3
+
+def test_shopping_wrong_inventory_intentional():
+    products.clear()
+    products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
+    sales_stats["total_revenue"] = 0
+    orders.clear()
+    with app.test_request_context('/checkout', method='POST', data={'name': 'A', 'phone': '012', 'address': 'HN', 'payment_method': 'COD'}):
+        session['username'] = 'buyer'
+        session['role'] = 'customer'
+        session['cart'] = {'SP01': 3}
+        res = checkout()
+        assert res.status_code == 302
+        assert products["SP01"]["quantity"] == 7
+        assert sales_stats["total_revenue"] == 45000000
+        assert 'cart' not in session
+
+def test_admin_add_to_cart_blocked():
+    products.clear()
+    products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
+    with app.test_request_context('/add_to_cart/SP01', method='POST', data={'quantity': 1}):
+        session['username'] = 'admin'
+        session['role'] = 'admin'
+        res = add_to_cart('SP01')
+        assert res.status_code == 302
+        assert res.headers.get('Location') == '/'
+        assert 'cart' not in session or 'SP01' not in session['cart']
+
+# ==========================================
+# 4. Quản lý đơn hàng (Order Management)
+# ==========================================
+
+def test_order_customer_isolation():
+    orders.clear()
+    orders.append({
+        'order_id': 'DH001', 'username': 'buyer1',
+        'customer_name': 'Buyer One', 'phone': '011',
+        'address': 'HN', 'payment_method': 'COD',
+        'items': [{'name': 'Laptop Dell', 'qty': 1}], 'total': 15000000, 'date': '10/06/2026 12:00', 'status': 'Chờ xử lý'
+    })
+    orders.append({
+        'order_id': 'DH002', 'username': 'buyer2',
+        'customer_name': 'Buyer Two', 'phone': '022',
+        'address': 'SG', 'payment_method': 'COD',
+        'items': [{'name': 'Laptop Dell', 'qty': 1}], 'total': 15000000, 'date': '10/06/2026 12:05', 'status': 'Chờ xử lý'
+    })
+    with app.test_request_context('/orders'):
+        session['username'] = 'buyer2'
+        session['role'] = 'customer'
+        res = order_history()
+        assert "DH002" in res
+        assert "Buyer Two" in res
+        assert "DH001" not in res
+        assert "Buyer One" not in res
+
+def test_order_admin_view_all():
+    orders.clear()
+    orders.append({
+        'order_id': 'DH001', 'username': 'buyer1',
+        'customer_name': 'Buyer One', 'phone': '011',
+        'address': 'HN', 'payment_method': 'COD',
+        'items': [{'name': 'Laptop Dell', 'qty': 1}], 'total': 15000000, 'date': '10/06/2026 12:00', 'status': 'Chờ xử lý'
+    })
+    with app.test_request_context('/orders'):
+        session['username'] = 'admin'
+        session['role'] = 'admin'
+        res = order_history()
+        assert "DH001" in res
+        assert "Buyer One" in res
+
+def test_order_admin_update_status():
+    orders.clear()
+    orders.append({
+        'order_id': 'DH001', 'username': 'buyer1',
+        'customer_name': 'Buyer One', 'phone': '011',
+        'address': 'HN', 'payment_method': 'COD',
+        'items': [{'name': 'Laptop Dell', 'qty': 1}], 'total': 15000000, 'date': '10/06/2026 12:00', 'status': 'Chờ xử lý'
+    })
+    with app.test_request_context('/update_order/DH001', method='POST', data={'status': 'Đang giao'}):
+        session['username'] = 'admin'
+        session['role'] = 'admin'
+        res = update_order('DH001')
+        assert res.status_code == 302
+        assert res.headers.get('Location') == '/orders'
+        assert orders[0]['status'] == 'Đang giao'
+        assert any("Đã cập nhật trạng thái đơn DH001 thành: Đang giao" in m[1] for m in get_flashed_messages(with_categories=True))
+
+# ==========================================
+# 5. Tìm kiếm & Lọc nâng cao (Search)
+# ==========================================
+
+def test_search_by_keyword(search_setup):
+    with app.test_request_context('/search?q=dell'):
+        session['username'] = 'admin'
+        session['role'] = 'admin'
+        res = search_products()
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data["count"] == 2
+        names = [p["name"] for p in data["products"]]
+        assert "Laptop Dell" in names
+        assert "Màn hình Dell" in names
+
+def test_search_filter_by_price_range(search_setup):
+    with app.test_request_context('/search?min_price=200000&max_price=1000000'):
+        session['username'] = 'admin'
+        session['role'] = 'admin'
+        res = search_products()
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data["count"] == 2
+        for p in data["products"]:
+            assert 200000 <= p["price"] <= 1000000
+
+def test_search_filter_in_stock_only(search_setup):
+    with app.test_request_context('/search?in_stock=1'):
+        session['username'] = 'admin'
+        session['role'] = 'admin'
+        res = search_products()
+        assert res.status_code == 200
+        data = res.get_json()
+        names = [p["name"] for p in data["products"]]
+        assert "Bàn phím cơ" not in names
+        assert data["count"] == 3
+
+def test_search_unauthenticated_blocked(search_setup):
+    with app.test_request_context('/search'):
+        # Không truyền session, để login_required kích hoạt
+        res = search_products()
+        assert res.status_code == 302
+        assert res.headers.get('Location') == '/login'
+        assert any("Vui lòng đăng nhập!" in m[1] for m in get_flashed_messages(with_categories=True))
