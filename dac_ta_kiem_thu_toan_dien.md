@@ -3,14 +3,14 @@
 
 ---
 
-| Thông tin | Nội dung |
-| :--- | :--- |
-| **Tên tài liệu** | Tài liệu Đặc tả Kiểm thử & Quy trình thực thi kiểm thử bằng pytest |
-| **Dự án** | Hệ thống Quản lý Bán hàng — Flask Web App |
-| **Phiên bản** | 1.1 |
-| **Ngày tạo** | 06/06/2026 |
-| **Công cụ kiểm thử** | pytest 8.2.0 (Python 3.12) |
-| **Đối tượng kiểm thử** | [app.py](file:///c:/Users/noqok/Documents/Project/pytestdemo/app.py) |
+| Thông tin                | Nội dung                                                                       |
+| :-------------------------| :-------------------------------------------------------------------------------|
+| **Tên tài liệu**         | Tài liệu Đặc tả Kiểm thử & Quy trình thực thi kiểm thử bằng pytest             |
+| **Dự án**                | Hệ thống Quản lý Bán hàng — Flask Web App                                      |
+| **Phiên bản**            | 1.1                                                                            |
+| **Ngày tạo**             | 06/06/2026                                                                     |
+| **Công cụ kiểm thử**     | pytest 8.2.0 (Python 3.12)                                                     |
+| **Đối tượng kiểm thử**   | [app.py](file:///c:/Users/noqok/Documents/Project/pytestdemo/app.py)           |
 | **Bộ mã nguồn kiểm thử** | [test_app.py](file:///c:/Users/noqok/Documents/Project/pytestdemo/test_app.py) |
 
 ---

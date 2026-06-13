@@ -2,35 +2,47 @@
 {% block content %}
 <div class="row justify-content-center mt-5">
     <div class="col-md-5">
-        <div class="card shadow">
-            <div
-                class="card-header text-white text-center {% if action == 'login' %}bg-primary{% else %}bg-success{% endif %}">
-                <h4>{% if action == 'login' %}Đăng Nhập Hệ Thống{% else %}Đăng Ký Tài Khoản{% endif %}</h4>
+        <div class="glass-panel p-4 animate-fade-in">
+            <div class="text-center mb-4">
+                <div class="mb-2">
+                    {% if action == 'login' %}
+                        <span class="fs-1"><i class="fa-solid fa-user-lock text-accent"></i></span>
+                    {% else %}
+                        <span class="fs-1"><i class="fa-solid fa-user-plus text-accent"></i></span>
+                    {% endif %}
+                </div>
+                <h4 class="fw-bold">{% if action == 'login' %}Đăng Nhập Hệ Thống{% else %}Đăng Ký Tài Khoản{% endif %}</h4>
+                <p class="text-secondary small">Vui lòng điền thông tin chi tiết bên dưới</p>
             </div>
-            <div class="card-body p-4">
+            <div class="card-body">
                 <form method="POST">
                     <div class="mb-3">
-                        <label class="form-label">Tên Đăng Nhập</label>
-                        <input type="text" name="username" class="form-control" required>
+                        <label class="form-label d-flex align-items-center">
+                            <i class="fa-solid fa-user me-2 text-secondary"></i> Tên Đăng Nhập
+                        </label>
+                        <input type="text" name="username" class="form-control" placeholder="Nhập tài khoản..." required autocomplete="off">
                     </div>
                     <div class="mb-4">
-                        <label class="form-label">Mật Khẩu</label>
-                        <input type="password" name="password" class="form-control" required>
+                        <label class="form-label d-flex align-items-center">
+                            <i class="fa-solid fa-key me-2 text-secondary"></i> Mật Khẩu
+                        </label>
+                        <input type="password" name="password" class="form-control" placeholder="Nhập mật khẩu..." required>
                     </div>
                     <button type="submit"
-                        class="btn w-100 {% if action == 'login' %}btn-primary{% else %}btn-success{% endif %}">
+                        class="btn w-100 {% if action == 'login' %}btn-grad-primary{% else %}btn-grad-success{% endif %} text-white py-2">
                         {% if action == 'login' %}Đăng Nhập{% else %}Đăng Ký{% endif %}
                     </button>
                 </form>
-                <div class="text-center mt-3">
+                <div class="text-center mt-4 border-top pt-3" style="border-color: var(--glass-border) !important;">
                     {% if action == 'login' %}
-                    <p>Chưa có tài khoản? <a href="/register">Đăng ký ngay</a></p>
+                    <p class="text-secondary mb-0">Chưa có tài khoản? <a href="/register" class="text-accent text-decoration-none fw-semibold">Đăng ký ngay</a></p>
                     {% else %}
-                    <p>Đã có tài khoản? <a href="/login">Quay lại đăng nhập</a></p>
+                    <p class="text-secondary mb-0">Đã có tài khoản? <a href="/login" class="text-accent text-decoration-none fw-semibold">Quay lại đăng nhập</a></p>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% block extra_js %}{% endblock %}
 {% endblock %}

@@ -3,79 +3,113 @@
 
 {% if view == 'list' %}
 {% if session.get('role') == 'admin' %}
-<div class="row mb-4 text-center">
-    <div class="col-md-4">
-        <div class="card bg-info text-white shadow-sm">
-            <div class="card-body">
-                <h5>Tổng SP</h5>
-                <h3>{{ stats['items'] }}</h3>
+<div class="row mb-4 g-4">
+    <div class="col-md-4 animate-fade-in" style="animation-delay: 0.1s;">
+        <div class="glass-card stat-card stat-primary p-4 d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="text-secondary mb-1">Tổng Sản Phẩm</h6>
+                <h2 class="fw-bold mb-0 text-white">{{ stats['items'] }}</h2>
             </div>
+            <div class="stat-icon"><i class="fa-solid fa-box-open text-accent"></i></div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card bg-warning text-white shadow-sm">
-            <div class="card-body">
-                <h5>Tồn Kho</h5>
-                <h3>{{ stats['stock'] }}</h3>
+    <div class="col-md-4 animate-fade-in" style="animation-delay: 0.2s;">
+        <div class="glass-card stat-card stat-warning p-4 d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="text-secondary mb-1">Tổng Tồn Kho</h6>
+                <h2 class="fw-bold mb-0 text-white">{{ stats['stock'] }}</h2>
             </div>
+            <div class="stat-icon"><i class="fa-solid fa-warehouse text-warning"></i></div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card bg-success text-white shadow-sm">
-            <div class="card-body">
-                <h5>Doanh Thu</h5>
-                <h3>{{ "{:,.0f}".format(stats['revenue']) }} đ</h3>
+    <div class="col-md-4 animate-fade-in" style="animation-delay: 0.3s;">
+        <div class="glass-card stat-card stat-success p-4 d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="text-secondary mb-1">Doanh Thu Hệ Thống</h6>
+                <h2 class="fw-bold mb-0 text-white">{{ "{:,.0f}".format(stats['revenue']) }} đ</h2>
             </div>
+            <div class="stat-icon"><i class="fa-solid fa-money-bill-trend-up text-success"></i></div>
         </div>
     </div>
 </div>
 {% endif %}
 
-<div class="d-flex justify-content-between mb-3">
-    <form action="/" method="GET" class="d-flex" style="width: 400px;"><input type="text" name="search"
-            class="form-control me-2" placeholder="Tìm kiếm SP..."><button type="submit"
-            class="btn btn-outline-primary">Tìm</button></form>
-    {% if session.get('role') == 'admin' %}<a href="/add" class="btn btn-primary">+ Thêm SP</a>{% endif %}
+<div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-4">
+    <form action="/" method="GET" class="d-flex flex-grow-1 flex-sm-grow-0" style="max-width: 450px;">
+        <div class="input-group">
+            <span class="input-group-text bg-transparent border-end-0 text-secondary" style="border-color: var(--glass-border) !important;">
+                <i class="fa-solid fa-magnifying-glass"></i>
+            </span>
+            <input type="text" name="search" class="form-control border-start-0" placeholder="Tìm kiếm sản phẩm..." style="border-color: var(--glass-border) !important;">
+            <button type="submit" class="btn btn-grad-primary px-4">Tìm kiếm</button>
+        </div>
+    </form>
+    {% if session.get('role') == 'admin' %}
+        <a href="/add" class="btn btn-grad-primary d-flex align-items-center gap-2">
+            <i class="fa-solid fa-circle-plus"></i> Thêm Sản Phẩm Mới
+        </a>
+    {% endif %}
 </div>
 
-<div class="card shadow-sm">
-    <div class="card-body">
-        <table class="table table-hover align-middle text-center">
-            <thead class="table-light">
+<div class="glass-panel p-4">
+    <div class="table-custom-wrapper">
+        <table class="table-custom text-center align-middle">
+            <thead>
                 <tr>
-                    <th>Mã SP</th>
-                    <th>Tên Sản Phẩm</th>
-                    <th>Giá Bán</th>
-                    <th>Tình Trạng</th>
-                    <th class="text-end">Hành Động</th>
+                    <th style="width: 150px;">Mã SP</th>
+                    <th class="text-start">Tên Sản Phẩm</th>
+                    <th style="width: 200px;">Giá Bán</th>
+                    <th style="width: 180px;">Tình Trạng</th>
+                    <th class="text-end" style="width: 250px;">Hành Động</th>
                 </tr>
             </thead>
             <tbody>
                 {% for ma, info in products.items() %}
                 <tr>
-                    <td><strong>{{ ma }}</strong></td>
-                    <td class="text-start">{{ info.name }}</td>
-                    <td class="text-danger fw-bold">{{ "{:,.0f}".format(info.price) }} đ</td>
-                    <td><span class="badge {% if info.quantity > 0 %}bg-success{% else %}bg-secondary{% endif %}">{% if
-                            info.quantity > 0 %}Còn hàng ({{ info.quantity }}){% else %}Hết hàng{% endif %}</span></td>
+                    <td><span class="badge bg-dark border border-secondary text-white px-3 py-2 fw-bold" style="border-color: rgba(255,255,255,0.1) !important;">{{ ma }}</span></td>
+                    <td class="text-start fw-semibold">{{ info.name }}</td>
+                    <td class="text-accent fw-bold fs-6">{{ "{:,.0f}".format(info.price) }} đ</td>
+                    <td>
+                        {% if info.quantity > 0 %}
+                            <span class="badge-custom badge-status-active">
+                                <i class="fa-solid fa-circle-check"></i> Còn hàng ({{ info.quantity }})
+                            </span>
+                        {% else %}
+                            <span class="badge-custom badge-status-inactive">
+                                <i class="fa-solid fa-circle-xmark"></i> Hết hàng
+                            </span>
+                        {% endif %}
+                    </td>
                     <td class="text-end">
                         {% if session.get('role') == 'admin' %}
-                        <a href="/edit/{{ ma }}" class="btn btn-sm btn-warning">Sửa</a>
-                        <form action="/delete/{{ ma }}" method="POST" class="d-inline"><button
-                                class="btn btn-sm btn-danger" onclick="return confirm('Xóa?')">Xóa</button></form>
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="/edit/{{ ma }}" class="btn btn-sm btn-grad-warning text-white py-2 px-3">
+                                <i class="fa-solid fa-pen-to-square"></i> Sửa
+                            </a>
+                            <form action="/delete/{{ ma }}" method="POST" class="d-inline">
+                                <button class="btn btn-sm btn-grad-danger text-white py-2 px-3" onclick="return confirm('Bạn có chắc chắn muốn xóa sản phẩm này không?')">
+                                    <i class="fa-solid fa-trash-can"></i> Xóa
+                                </button>
+                            </form>
+                        </div>
                         {% elif info.quantity > 0 %}
-                        <form action="/add_to_cart/{{ ma }}" method="POST"
-                            class="d-inline d-flex justify-content-end align-items-center">
-                            <input type="number" name="quantity" value="1" min="1" max="{{ info.quantity }}"
-                                class="form-control form-control-sm me-2" style="width: 70px;"><button type="submit"
-                                class="btn btn-sm btn-success">Thêm</button>
+                        <form action="/add_to_cart/{{ ma }}" method="POST" class="d-flex justify-content-end align-items-center gap-2">
+                            <input type="number" name="quantity" value="1" min="1" max="{{ info.quantity }}" class="form-control form-control-sm text-center" style="width: 75px; height: 38px;">
+                            <button type="submit" class="btn btn-sm btn-grad-success text-white py-2 px-3">
+                                <i class="fa-solid fa-cart-plus"></i> Thêm
+                            </button>
                         </form>
                         {% endif %}
                     </td>
                 </tr>
-                {% else %}<tr>
-                    <td colspan="5">Không có sản phẩm nào.</td>
-                </tr>{% endfor %}
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center py-5">
+                        <i class="fa-solid fa-box-open fs-1 text-secondary mb-3 d-block"></i>
+                        <span class="text-secondary">Không có sản phẩm nào được tìm thấy.</span>
+                    </td>
+                </tr>
+                {% endfor %}
             </tbody>
         </table>
     </div>
@@ -84,22 +118,47 @@
 {% elif view == 'form' %}
 <div class="row justify-content-center">
     <div class="col-md-6">
-        <div class="card shadow-sm">
-            <div class="card-header bg-white">
-                <h4 class="mb-0">{{ title }}</h4>
+        <div class="glass-panel p-4 animate-fade-in">
+            <div class="d-flex align-items-center gap-3 border-bottom pb-3 mb-4" style="border-color: var(--glass-border) !important;">
+                <span class="fs-3 text-accent"><i class="fa-solid fa-box-open"></i></span>
+                <h4 class="mb-0 fw-bold">{{ title }}</h4>
             </div>
             <div class="card-body">
                 <form method="POST">
-                    {% if action == 'add' %}<div class="mb-3"><label>Mã Sản Phẩm</label><input type="text" name="ma_sp"
-                            class="form-control" required></div>{% endif %}
-                    <div class="mb-3"><label>Tên Sản Phẩm</label><input type="text" name="name" class="form-control"
-                            value="{{ sp.name if sp else '' }}" required></div>
-                    <div class="mb-3"><label>Giá Bán (VNĐ)</label><input type="number" name="price" class="form-control"
-                            value="{{ sp.price if sp else '' }}" required min="0"></div>
-                    <div class="mb-3"><label>Số Lượng</label><input type="number" name="quantity" class="form-control"
-                            value="{{ sp.quantity if sp else '' }}" required min="0"></div>
-                    <button type="submit" class="btn btn-primary w-100">Xác Nhận</button><a href="/"
-                        class="btn btn-outline-secondary w-100 mt-2">Hủy / Quay Lại</a>
+                    {% if action == 'add' %}
+                    <div class="mb-3">
+                        <label class="form-label d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-tag text-secondary"></i> Mã Sản Phẩm
+                        </label>
+                        <input type="text" name="ma_sp" class="form-control" placeholder="Ví dụ: SP03" required autocomplete="off">
+                    </div>
+                    {% endif %}
+                    <div class="mb-3">
+                        <label class="form-label d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-font text-secondary"></i> Tên Sản Phẩm
+                        </label>
+                        <input type="text" name="name" class="form-control" value="{{ sp.name if sp else '' }}" placeholder="Nhập tên sản phẩm..." required autocomplete="off">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-coins text-secondary"></i> Giá Bán (VNĐ)
+                        </label>
+                        <input type="number" name="price" class="form-control" value="{{ sp.price if sp else '' }}" placeholder="Nhập giá bán..." required min="0">
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-layer-group text-secondary"></i> Số Lượng Kho
+                        </label>
+                        <input type="number" name="quantity" class="form-control" value="{{ sp.quantity if sp else '' }}" placeholder="Nhập số lượng..." required min="0">
+                    </div>
+                    <div class="d-flex flex-column gap-2">
+                        <button type="submit" class="btn btn-grad-primary w-100 py-2">
+                            <i class="fa-solid fa-circle-check"></i> Xác Nhận
+                        </button>
+                        <a href="/" class="btn btn-outline-cancel w-100 py-2">
+                            <i class="fa-solid fa-chevron-left"></i> Hủy / Quay Lại
+                        </a>
+                    </div>
                 </form>
             </div>
         </div>
