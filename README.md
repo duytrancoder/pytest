@@ -14,10 +14,6 @@ pytestdemo/
 │   ├── auth.html               # Giao diện Đăng nhập / Đăng ký
 │   ├── products.html           # Quản lý & hiển thị sản phẩm
 │   └── transactions.html       # Giỏ hàng, thanh toán & lịch sử đơn hàng
-├── bao_cao_ktpm.md             # Báo cáo tổng quan bài tập lớn môn Kiểm thử phần mềm
-├── dac_ta_kiem_thu.md          # Tài liệu đặc tả 19 ca kiểm thử chi tiết
-├── dac_ta_kiem_thu_toan_dien.md# Đặc tả kiểm thử toàn diện
-└── testing_report.md           # Báo cáo kết quả thực thi kiểm thử
 ```
 
 ---
