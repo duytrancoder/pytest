@@ -33,6 +33,7 @@ services:
       - MYSQL_USER=appuser
       - MYSQL_PASSWORD=apppassword
       - MYSQL_PORT=3306
+      - SECRET_KEY=khoa_bi_mat_production_sieu_bao_mat_123456
     depends_on:
       db:
         condition: service_healthy

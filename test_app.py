@@ -1,5 +1,6 @@
 import pytest
 from flask import session, get_flashed_messages, url_for
+from werkzeug.security import generate_password_hash
 from app import (
     app,
     users,
@@ -19,11 +20,6 @@ from app import (
     search_products,
 )
 
-# Giữ nguyên fixture lỗi kết nối cơ sở dữ liệu để tương thích
-@pytest.fixture
-def admin_setup_error():
-    raise RuntimeError("Lỗi kết nối cơ sở dữ liệu admin (Lỗi thiết lập Fixture)!")
-
 # Fixture setup sản phẩm phục vụ tìm kiếm nâng cao
 @pytest.fixture
 def search_setup():
@@ -39,7 +35,7 @@ def search_setup():
 
 def test_register_success():
     users.clear()
-    users["admin"] = {"password": "123456", "role": "admin"}
+    users["admin"] = {"password": generate_password_hash("123456"), "role": "admin"}
     with app.test_request_context('/register', method='POST', data={'username': 'khach_moi', 'password': '123'}):
         res = register()
         assert res.status_code == 302
@@ -50,15 +46,15 @@ def test_register_success():
 
 def test_register_duplicate():
     users.clear()
-    users["test_user"] = {"password": "123", "role": "customer"}
+    users["test_user"] = {"password": generate_password_hash("123"), "role": "customer"}
     with app.test_request_context('/register', method='POST', data={'username': 'test_user', 'password': '456'}):
         res = register()
-        assert isinstance(res, str)  # Trả về chuỗi HTML của trang auth.html
+        assert isinstance(res, str)  # Trả về HTML
         assert any("Tên đăng nhập đã tồn tại!" in m[1] for m in get_flashed_messages(with_categories=True))
 
 def test_login_success():
     users.clear()
-    users["admin"] = {"password": "123456", "role": "admin"}
+    users["admin"] = {"password": generate_password_hash("123456"), "role": "admin"}
     with app.test_request_context('/login', method='POST', data={'username': 'admin', 'password': '123456'}):
         res = app_login()
         assert res.status_code == 302
@@ -77,12 +73,12 @@ def test_logout_success():
         assert 'username' not in session
         assert any("Bạn đã đăng xuất!" in m[1] for m in get_flashed_messages(with_categories=True))
 
-def test_login_wrong_message_intentional():
+def test_login_wrong_password_fails():
     users.clear()
-    users["admin"] = {"password": "123456", "role": "admin"}
+    users["admin"] = {"password": generate_password_hash("123456"), "role": "admin"}
     with app.test_request_context('/login', method='POST', data={'username': 'admin', 'password': 'mat_khau_sai'}):
         res = app_login()
-        assert isinstance(res, str)  # Trả về chuỗi HTML quay lại trang đăng nhập
+        assert isinstance(res, str)
         assert any("Sai tên đăng nhập/mật khẩu!" in m[1] for m in get_flashed_messages(with_categories=True))
         assert 'username' not in session
 
@@ -119,12 +115,11 @@ def test_customer_access_denied():
         session['username'] = 'khach'
         session['role'] = 'customer'
         res = add_product()
-        # Chuyển hướng vì chỉ admin mới có quyền
         assert res.status_code == 302
         assert res.headers.get('Location') == '/'
         assert any("Chỉ admin mới có quyền!" in m[1] for m in get_flashed_messages(with_categories=True))
 
-def test_admin_add_wrong_quantity_intentional():
+def test_admin_add_product_success():
     products.clear()
     with app.test_request_context('/add', method='POST', data={'ma_sp': 'SP02', 'name': 'Ban phim co', 'price': 1000000, 'quantity': 5}):
         session['username'] = 'admin'
@@ -133,6 +128,17 @@ def test_admin_add_wrong_quantity_intentional():
         assert res.status_code == 302
         assert res.headers.get('Location') == '/'
         assert products["SP02"]["quantity"] == 5
+
+def test_admin_add_duplicate_product_fails():
+    products.clear()
+    products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
+    with app.test_request_context('/add', method='POST', data={'ma_sp': 'SP01', 'name': 'Laptop Mới', 'price': 20000000, 'quantity': 5}):
+        session['username'] = 'admin'
+        session['role'] = 'admin'
+        res = add_product()
+        assert res.status_code == 302
+        assert any("Mã SP đã tồn tại!" in m[1] for m in get_flashed_messages(with_categories=True))
+        assert products["SP01"]["name"] == "Laptop Dell"  # Không bị thay đổi
 
 # ==========================================
 # 3. Giỏ hàng & Thanh toán (Cart & Checkout)
@@ -150,7 +156,7 @@ def test_cart_add_success():
         assert any("Đã thêm 3 sản phẩm vào giỏ!" in m[1] for m in get_flashed_messages(with_categories=True))
         assert session.get('cart', {}).get('SP01') == 3
 
-def test_shopping_wrong_inventory_intentional():
+def test_shopping_checkout_success():
     products.clear()
     products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
     sales_stats["total_revenue"] = 0
@@ -174,7 +180,31 @@ def test_admin_add_to_cart_blocked():
         res = add_to_cart('SP01')
         assert res.status_code == 302
         assert res.headers.get('Location') == '/'
+        assert any("Admin không thể mua hàng!" in m[1] for m in get_flashed_messages(with_categories=True))
         assert 'cart' not in session or 'SP01' not in session['cart']
+
+def test_shopping_exceeds_inventory_fails():
+    products.clear()
+    products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 5}
+    with app.test_request_context('/add_to_cart/SP01', method='POST', data={'quantity': 10}):
+        session['username'] = 'buyer'
+        session['role'] = 'customer'
+        res = add_to_cart('SP01')
+        assert res.status_code == 302
+        assert any("Không thể thêm" in m[1] for m in get_flashed_messages(with_categories=True))
+        assert 'cart' not in session or session['cart'].get('SP01', 0) == 0
+
+def test_add_to_cart_cumulative_exceeds_inventory():
+    products.clear()
+    products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 5}
+    with app.test_request_context('/add_to_cart/SP01', method='POST', data={'quantity': 3}):
+        session['username'] = 'buyer'
+        session['role'] = 'customer'
+        session['cart'] = {'SP01': 3} # Giả sử đã có 3 cái trong giỏ
+        res = add_to_cart('SP01')
+        assert res.status_code == 302
+        assert any("Không thể thêm" in m[1] for m in get_flashed_messages(with_categories=True))
+        assert session['cart']['SP01'] == 3 # Số lượng trong giỏ không tăng
 
 # ==========================================
 # 4. Quản lý đơn hàng (Order Management)
@@ -250,6 +280,16 @@ def test_search_by_keyword(search_setup):
         names = [p["name"] for p in data["products"]]
         assert "Laptop Dell" in names
         assert "Màn hình Dell" in names
+
+def test_search_no_results(search_setup):
+    with app.test_request_context('/search?q=khongtontai'):
+        session['username'] = 'admin'
+        session['role'] = 'admin'
+        res = search_products()
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data["count"] == 0
+        assert len(data["products"]) == 0
 
 def test_search_filter_by_price_range(search_setup):
     with app.test_request_context('/search?min_price=200000&max_price=1000000'):
