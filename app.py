@@ -154,6 +154,10 @@ def admin_required(f):
 def register():
     if request.method == 'POST':
         u, p = request.form['username'].strip(), request.form['password'].strip()
+        if not u or not p:
+            flash("Tên đăng nhập và mật khẩu không được để trống!", "danger")
+            return render_template('auth.html', action="register")
+            
         if db_enabled:
             try:
                 with g.db.cursor() as cursor:
@@ -430,7 +434,11 @@ def checkout():
         return redirect(url_for('index'))
     items, total = get_cart()
     
-    if request.method == 'POST' and items:
+    if request.method == 'POST':
+        if not items:
+            flash("Giỏ hàng của bạn đang trống!", "warning")
+            return redirect(url_for('view_cart'))
+            
         if db_enabled:
             try:
                 with g.db.cursor() as cursor:
@@ -644,4 +652,4 @@ def search_products():
         return jsonify({'count': len(results), 'products': results})
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=os.environ.get("FLASK_DEBUG", "false").lower() == "true")
