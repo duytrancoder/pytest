@@ -243,6 +243,10 @@ def add_product():
             flash("Giá hoặc số lượng không hợp lệ!", "danger")
             return redirect(url_for('add_product'))
 
+        if price <= 0 or quantity < 0:
+            flash("Giá phải > 0 và số lượng phải >= 0!", "danger")
+            return redirect(url_for('add_product'))
+
         if db_enabled:
             try:
                 with g.db.cursor() as cursor:
@@ -290,6 +294,10 @@ def edit_product(ma_sp):
                     flash("Giá hoặc số lượng không hợp lệ!", "danger")
                     return redirect(url_for('edit_product', ma_sp=ma_sp))
                 
+                if price <= 0 or quantity < 0:
+                    flash("Giá phải > 0 và số lượng phải >= 0!", "danger")
+                    return redirect(url_for('edit_product', ma_sp=ma_sp))
+                
                 try:
                     cursor.execute(
                         "UPDATE products SET name = %s, price = %s, quantity = %s WHERE ma_sp = %s",
@@ -313,6 +321,11 @@ def edit_product(ma_sp):
             except ValueError:
                 flash("Giá hoặc số lượng không hợp lệ!", "danger")
                 return redirect(url_for('edit_product', ma_sp=ma_sp))
+                
+            if price <= 0 or quantity < 0:
+                flash("Giá phải > 0 và số lượng phải >= 0!", "danger")
+                return redirect(url_for('edit_product', ma_sp=ma_sp))
+                
             products[ma_sp].update({"name": request.form['name'], "price": price, "quantity": quantity})
             flash("Sửa thành công!", "success")
             return redirect(url_for('index'))
@@ -345,6 +358,10 @@ def add_to_cart(ma_sp):
         qty = int(request.form.get('quantity', 1))
     except ValueError:
         flash("Số lượng không hợp lệ!", "danger")
+        return redirect(url_for('index'))
+        
+    if qty <= 0:
+        flash("Số lượng phải lớn 0!", "danger")
         return redirect(url_for('index'))
         
     available_qty = 0

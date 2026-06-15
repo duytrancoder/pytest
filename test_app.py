@@ -20,10 +20,19 @@ from app import (
     search_products,
 )
 
+# Reset global state tự động trước mỗi test
+@pytest.fixture(autouse=True)
+def reset_globals():
+    users.clear()
+    users["admin"] = {"password": generate_password_hash("123456"), "role": "admin"}
+    products.clear()
+    sales_stats["total_revenue"] = 0
+    orders.clear()
+    yield
+
 # Fixture setup sản phẩm phục vụ tìm kiếm nâng cao
 @pytest.fixture
 def search_setup():
-    products.clear()
     products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
     products["SP02"] = {"name": "Chuột Logitech", "price": 300000,   "quantity": 50}
     products["SP03"] = {"name": "Bàn phím cơ",   "price": 800000,   "quantity": 0}   # hết hàng
@@ -34,8 +43,6 @@ def search_setup():
 # ==========================================
 
 def test_register_success():
-    users.clear()
-    users["admin"] = {"password": generate_password_hash("123456"), "role": "admin"}
     with app.test_request_context('/register', method='POST', data={'username': 'khach_moi', 'password': '123'}):
         res = register()
         assert res.status_code == 302
@@ -45,7 +52,6 @@ def test_register_success():
         assert users["khach_moi"]["role"] == "customer"
 
 def test_register_duplicate():
-    users.clear()
     users["test_user"] = {"password": generate_password_hash("123"), "role": "customer"}
     with app.test_request_context('/register', method='POST', data={'username': 'test_user', 'password': '456'}):
         res = register()
@@ -53,8 +59,6 @@ def test_register_duplicate():
         assert any("Tên đăng nhập đã tồn tại!" in m[1] for m in get_flashed_messages(with_categories=True))
 
 def test_login_success():
-    users.clear()
-    users["admin"] = {"password": generate_password_hash("123456"), "role": "admin"}
     with app.test_request_context('/login', method='POST', data={'username': 'admin', 'password': '123456'}):
         res = app_login()
         assert res.status_code == 302
@@ -74,8 +78,6 @@ def test_logout_success():
         assert any("Bạn đã đăng xuất!" in m[1] for m in get_flashed_messages(with_categories=True))
 
 def test_login_wrong_password_fails():
-    users.clear()
-    users["admin"] = {"password": generate_password_hash("123456"), "role": "admin"}
     with app.test_request_context('/login', method='POST', data={'username': 'admin', 'password': 'mat_khau_sai'}):
         res = app_login()
         assert isinstance(res, str)
@@ -87,7 +89,6 @@ def test_login_wrong_password_fails():
 # ==========================================
 
 def test_admin_edit_product():
-    products.clear()
     products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
     with app.test_request_context('/edit/SP01', method='POST', data={'name': 'Laptop Dell XPS', 'price': 20000000, 'quantity': 15}):
         session['username'] = 'admin'
@@ -100,7 +101,6 @@ def test_admin_edit_product():
         assert products["SP01"]["quantity"] == 15
 
 def test_admin_delete_product():
-    products.clear()
     products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
     with app.test_request_context('/delete/SP01', method='POST'):
         session['username'] = 'admin'
@@ -120,7 +120,6 @@ def test_customer_access_denied():
         assert any("Chỉ admin mới có quyền!" in m[1] for m in get_flashed_messages(with_categories=True))
 
 def test_admin_add_product_success():
-    products.clear()
     with app.test_request_context('/add', method='POST', data={'ma_sp': 'SP02', 'name': 'Ban phim co', 'price': 1000000, 'quantity': 5}):
         session['username'] = 'admin'
         session['role'] = 'admin'
@@ -130,7 +129,6 @@ def test_admin_add_product_success():
         assert products["SP02"]["quantity"] == 5
 
 def test_admin_add_duplicate_product_fails():
-    products.clear()
     products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
     with app.test_request_context('/add', method='POST', data={'ma_sp': 'SP01', 'name': 'Laptop Mới', 'price': 20000000, 'quantity': 5}):
         session['username'] = 'admin'
@@ -145,7 +143,6 @@ def test_admin_add_duplicate_product_fails():
 # ==========================================
 
 def test_cart_add_success():
-    products.clear()
     products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
     with app.test_request_context('/add_to_cart/SP01', method='POST', data={'quantity': 3}):
         session['username'] = 'buyer'
@@ -157,10 +154,7 @@ def test_cart_add_success():
         assert session.get('cart', {}).get('SP01') == 3
 
 def test_shopping_checkout_success():
-    products.clear()
     products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
-    sales_stats["total_revenue"] = 0
-    orders.clear()
     with app.test_request_context('/checkout', method='POST', data={'name': 'A', 'phone': '012', 'address': 'HN', 'payment_method': 'COD'}):
         session['username'] = 'buyer'
         session['role'] = 'customer'
@@ -170,9 +164,10 @@ def test_shopping_checkout_success():
         assert products["SP01"]["quantity"] == 7
         assert sales_stats["total_revenue"] == 45000000
         assert 'cart' not in session
+        assert len(orders) == 1
+        assert orders[0]['status'] == 'Chờ xử lý'
 
 def test_admin_add_to_cart_blocked():
-    products.clear()
     products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 10}
     with app.test_request_context('/add_to_cart/SP01', method='POST', data={'quantity': 1}):
         session['username'] = 'admin'
@@ -184,7 +179,6 @@ def test_admin_add_to_cart_blocked():
         assert 'cart' not in session or 'SP01' not in session['cart']
 
 def test_shopping_exceeds_inventory_fails():
-    products.clear()
     products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 5}
     with app.test_request_context('/add_to_cart/SP01', method='POST', data={'quantity': 10}):
         session['username'] = 'buyer'
@@ -195,7 +189,6 @@ def test_shopping_exceeds_inventory_fails():
         assert 'cart' not in session or session['cart'].get('SP01', 0) == 0
 
 def test_add_to_cart_cumulative_exceeds_inventory():
-    products.clear()
     products["SP01"] = {"name": "Laptop Dell", "price": 15000000, "quantity": 5}
     with app.test_request_context('/add_to_cart/SP01', method='POST', data={'quantity': 3}):
         session['username'] = 'buyer'
@@ -211,7 +204,6 @@ def test_add_to_cart_cumulative_exceeds_inventory():
 # ==========================================
 
 def test_order_customer_isolation():
-    orders.clear()
     orders.append({
         'order_id': 'DH001', 'username': 'buyer1',
         'customer_name': 'Buyer One', 'phone': '011',
@@ -234,7 +226,6 @@ def test_order_customer_isolation():
         assert "Buyer One" not in res
 
 def test_order_admin_view_all():
-    orders.clear()
     orders.append({
         'order_id': 'DH001', 'username': 'buyer1',
         'customer_name': 'Buyer One', 'phone': '011',
@@ -249,7 +240,6 @@ def test_order_admin_view_all():
         assert "Buyer One" in res
 
 def test_order_admin_update_status():
-    orders.clear()
     orders.append({
         'order_id': 'DH001', 'username': 'buyer1',
         'customer_name': 'Buyer One', 'phone': '011',
